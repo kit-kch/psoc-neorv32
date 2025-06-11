@@ -64,7 +64,12 @@ entity neorv32_debug_dtm is
     dmi_resp_valid_i : in  std_ulogic; -- response valid when set
     dmi_resp_ready_o : out std_ulogic; -- ready to receive respond
     dmi_resp_data_i  : in  std_ulogic_vector(31 downto 0);
-    dmi_resp_err_i   : in  std_ulogic -- 0=ok, 1=error
+    dmi_resp_err_i   : in  std_ulogic; -- 0=ok, 1=error
+    -- jtagspi passthrough support --
+    jtagspi_sck_o    : out std_ulogic;
+    jtagspi_sdo_o    : out std_ulogic;
+    jtagspi_sdi_i    : in  std_ulogic;
+    jtagspi_csn_o    : out std_ulogic
   );
 end neorv32_debug_dtm;
 
@@ -84,6 +89,7 @@ architecture neorv32_debug_dtm_rtl of neorv32_debug_dtm is
     tms_ff      : std_ulogic_vector(2 downto 0);
     -- external --
     trst        : std_ulogic;
+    tck         : std_ulogic;
     tck_rising  : std_ulogic;
     tck_falling : std_ulogic;
     tdi         : std_ulogic;
@@ -105,6 +111,8 @@ architecture neorv32_debug_dtm_rtl of neorv32_debug_dtm is
   type tap_reg_t is record
     ireg             : std_ulogic_vector(04 downto 0);
     bypass           : std_ulogic;
+    bypass_spi       : std_ulogic;
+    bypass_spi_clk   : std_ulogic;
     idcode           : std_ulogic_vector(31 downto 0);
     dtmcs, dtmcs_nxt : std_ulogic_vector(31 downto 0);
     dmi,   dmi_nxt   : std_ulogic_vector((7+32+2)-1 downto 0); -- 7-bit address + 32-bit data + 2-bit operation
@@ -138,7 +146,9 @@ begin
       tap_sync.tck_ff  <= tap_sync.tck_ff( 1 downto 0) & jtag_tck_i;
       tap_sync.tdi_ff  <= tap_sync.tdi_ff( 1 downto 0) & jtag_tdi_i;
       tap_sync.tms_ff  <= tap_sync.tms_ff( 1 downto 0) & jtag_tms_i;
-      if (tap_sync.tck_falling = '1') then -- update output data TDO on falling edge of TCK
+      if (tap_reg.bypass_spi = '1') then
+        jtag_tdo_o <= jtagspi_sdi_i;
+      elsif (tap_sync.tck_falling = '1') then -- update output data TDO on falling edge of TCK
         jtag_tdo_o <= tap_sync.tdo;
       end if;
     end if;
@@ -150,6 +160,7 @@ begin
   -- JTAG clock edge --
   tap_sync.tck_rising  <= '1' when (tap_sync.tck_ff(2 downto 1) = "01") else '0';
   tap_sync.tck_falling <= '1' when (tap_sync.tck_ff(2 downto 1) = "10") else '0';
+  tap_sync.tck <= tap_sync.tck_ff(2);
 
   -- JTAG test mode select --
   tap_sync.tms <= tap_sync.tms_ff(2);
@@ -157,6 +168,10 @@ begin
   -- JTAG serial data input --
   tap_sync.tdi <= tap_sync.tdi_ff(2);
 
+  -- SPI forwarding --
+  jtagspi_sck_o <= tap_sync.tck and tap_reg.bypass_spi_clk;
+  jtagspi_sdo_o <= tap_sync.tdi;
+  jtagspi_csn_o <= not tap_reg.bypass_spi;
 
   -- Tap Control FSM ------------------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
@@ -196,9 +211,11 @@ begin
 
   -- Tap Register Access --------------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
-  reg_access: process(clk_i)
+  reg_access: process(rstn_i, clk_i)
   begin
-    if rising_edge(clk_i) then
+    if (rstn_i = '0') then
+      tap_reg.bypass_spi <= '0';
+    elsif rising_edge(clk_i) then
       -- serial data input --
       if (tap_sync.tck_rising = '1') then -- clock pulse (evaluate TDI on rising edge of TCK)
 
@@ -215,6 +232,7 @@ begin
             when "00001" => tap_reg.idcode <= IDCODE_VERSION & IDCODE_PARTID & IDCODE_MANID & '1'; -- IDCODE (LSB has to be always set!)
             when "10000" => tap_reg.dtmcs  <= tap_reg.dtmcs_nxt;-- dtmcs
             when "10001" => tap_reg.dmi    <= tap_reg.dmi_nxt; -- dmi
+            when "10010" => tap_reg.bypass_spi <= '1'; -- spi bypass
             when others  => tap_reg.bypass <= '0'; -- BYPASS
           end case;
         elsif (tap_ctrl.state = DR_SHIFT) then -- access phase
@@ -222,8 +240,12 @@ begin
             when "00001" => tap_reg.idcode <= tap_sync.tdi & tap_reg.idcode(tap_reg.idcode'left downto 1); -- IDCODE
             when "10000" => tap_reg.dtmcs  <= tap_sync.tdi & tap_reg.dtmcs(tap_reg.dtmcs'left downto 1); -- dtmcs
             when "10001" => tap_reg.dmi    <= tap_sync.tdi & tap_reg.dmi(tap_reg.dmi'left downto 1); -- dmi
+            when "10010" => tap_reg.bypass_spi_clk <= '1'; -- spi bypass
             when others  => tap_reg.bypass <= tap_sync.tdi; -- BYPASS
           end case;
+        elsif (tap_ctrl.state = DR_EXIT1) then -- access phase
+          tap_reg.bypass_spi <= '0';
+          tap_reg.bypass_spi_clk <= '0';
         end if;
       end if;
 

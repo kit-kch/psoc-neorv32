@@ -152,6 +152,11 @@ entity neorv32_top is
     jtag_tdi_i     : in  std_ulogic := 'U'; -- serial data input
     jtag_tdo_o     : out std_ulogic;        -- serial data output
     jtag_tms_i     : in  std_ulogic := 'U'; -- mode select
+    -- jtagspi passthrough support --
+    jtagspi_sck_o  : out std_ulogic;
+    jtagspi_sdo_o  : out std_ulogic;
+    jtagspi_sdi_i  : in  std_ulogic;
+    jtagspi_csn_o  : out std_ulogic;
 
     -- Wishbone bus interface (available if MEM_EXT_EN = true) --
     wb_tag_o       : out std_ulogic_vector(02 downto 0); -- request tag
@@ -1747,7 +1752,12 @@ begin
       dmi_resp_valid_i => dmi.resp_valid, -- response valid when set
       dmi_resp_ready_o => dmi.resp_ready, -- ready to receive respond
       dmi_resp_data_i  => dmi.resp_data,
-      dmi_resp_err_i   => dmi.resp_err    -- 0=ok, 1=error
+      dmi_resp_err_i   => dmi.resp_err,   -- 0=ok, 1=error
+      -- jtagspi passthrough support --
+      jtagspi_sck_o    => jtagspi_sck_o,
+      jtagspi_sdo_o    => jtagspi_sdo_o,
+      jtagspi_sdi_i    => jtagspi_sdi_i,
+      jtagspi_csn_o    => jtagspi_csn_o
     );
   end generate;
 

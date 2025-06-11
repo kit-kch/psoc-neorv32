@@ -1042,6 +1042,11 @@ package neorv32_package is
       jtag_tdi_i     : in  std_ulogic := 'U'; -- serial data input
       jtag_tdo_o     : out std_ulogic;        -- serial data output
       jtag_tms_i     : in  std_ulogic := 'U'; -- mode select
+      -- jtagspi passthrough support --
+      jtagspi_sck_o    : out std_ulogic;
+      jtagspi_sdo_o    : out std_ulogic;
+      jtagspi_sdi_i    : in  std_ulogic;
+      jtagspi_csn_o    : out std_ulogic;
       -- Wishbone bus interface (available if MEM_EXT_EN = true) --
       wb_tag_o       : out std_ulogic_vector(02 downto 0); -- request tag
       wb_adr_o       : out std_ulogic_vector(31 downto 0); -- address
@@ -2231,7 +2236,12 @@ package neorv32_package is
       dmi_resp_valid_i : in  std_ulogic; -- response valid when set
       dmi_resp_ready_o : out std_ulogic; -- ready to receive respond
       dmi_resp_data_i  : in  std_ulogic_vector(31 downto 0);
-      dmi_resp_err_i   : in  std_ulogic -- 0=ok, 1=error
+      dmi_resp_err_i   : in  std_ulogic; -- 0=ok, 1=error
+      -- jtagspi passthrough support --
+      jtagspi_sck_o    : out std_ulogic;
+      jtagspi_sdo_o    : out std_ulogic;
+      jtagspi_sdi_i    : in  std_ulogic;
+      jtagspi_csn_o    : out std_ulogic
     );
   end component;
 
