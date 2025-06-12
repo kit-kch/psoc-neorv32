@@ -850,6 +850,11 @@ package neorv32_package is
       jtag_tdi_i     : in  std_ulogic := 'L';
       jtag_tdo_o     : out std_ulogic;
       jtag_tms_i     : in  std_ulogic := 'L';
+      -- jtagspi passthrough support --
+      jtagspi_sck_o    : out std_ulogic;
+      jtagspi_sdo_o    : out std_ulogic;
+      jtagspi_sdi_i    : in  std_ulogic := 'L';
+      jtagspi_csn_o    : out std_ulogic;
       -- External bus interface (available if XBUS_EN = true) --
       xbus_adr_o     : out std_ulogic_vector(31 downto 0);
       xbus_dat_o     : out std_ulogic_vector(31 downto 0);

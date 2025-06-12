@@ -33,7 +33,12 @@ entity neorv32_debug_dtm is
     jtag_tms_i : in  std_ulogic; -- mode select
     -- debug module interface (DMI) --
     dmi_req_o  : out dmi_req_t; -- request
-    dmi_rsp_i  : in  dmi_rsp_t  -- response
+    dmi_rsp_i  : in  dmi_rsp_t;  -- response
+    -- jtagspi passthrough support --
+    jtagspi_sck_o    : out std_ulogic;
+    jtagspi_sdo_o    : out std_ulogic;
+    jtagspi_sdi_i    : in  std_ulogic;
+    jtagspi_csn_o    : out std_ulogic
   );
 end neorv32_debug_dtm;
 
@@ -43,11 +48,12 @@ architecture neorv32_debug_dtm_rtl of neorv32_debug_dtm is
   constant addr_idcode_c : std_ulogic_vector(4 downto 0) := "00001"; -- identifier
   constant addr_dtmcs_c  : std_ulogic_vector(4 downto 0) := "10000"; -- DTM status and control
   constant addr_dmi_c    : std_ulogic_vector(4 downto 0) := "10001"; -- debug module interface
+  constant addr_spi_c    : std_ulogic_vector(4 downto 0) := "10010"; -- JTAGSPI bypass
 
   -- tap JTAG signal synchronizer --
   type tap_sync_t is record
     tck_ff, tdi_ff, tms_ff : std_ulogic_vector(2 downto 0);
-    tck_rising, tck_falling, tdi, tms : std_ulogic;
+    tck, tck_rising, tck_falling, tdi, tms : std_ulogic;
   end record;
   signal tap_sync : tap_sync_t;
 
@@ -60,6 +66,8 @@ architecture neorv32_debug_dtm_rtl of neorv32_debug_dtm is
   type tap_reg_t is record
     ireg             : std_ulogic_vector(4 downto 0);
     bypass           : std_ulogic;
+    bypass_spi       : std_ulogic;
+    bypass_spi_clk   : std_ulogic;
     idcode           : std_ulogic_vector(31 downto 0);
     dtmcs, dtmcs_nxt : std_ulogic_vector(31 downto 0);
     dmi,   dmi_nxt   : std_ulogic_vector((7+32+2)-1 downto 0); -- 7-bit address + 32-bit data + 2-bit operation
@@ -109,7 +117,12 @@ begin
   -- JTAG inputs --
   tap_sync.tms <= tap_sync.tms_ff(2);
   tap_sync.tdi <= tap_sync.tdi_ff(2);
+  tap_sync.tck <= tap_sync.tck_ff(2);
 
+  -- SPI forwarding --
+  jtagspi_sck_o <= tap_sync.tck and tap_reg.bypass_spi_clk;
+  jtagspi_sdo_o <= tap_sync.tdi;
+  jtagspi_csn_o <= not tap_reg.bypass_spi;
 
   -- JTAG Tap Control FSM -------------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
@@ -172,6 +185,8 @@ begin
       tap_reg.dmi    <= (others => '0');
       tap_reg.bypass <= '0';
       jtag_tdo_o     <= '0';
+      tap_reg.bypass_spi <= '0';
+      tap_reg.bypass_spi_clk <= '0';
     elsif rising_edge(clk_i) then
 
       -- serial data input: instruction register --
@@ -187,6 +202,7 @@ begin
           when addr_idcode_c => tap_reg.idcode <= IDCODE_VERSION & IDCODE_PARTID & IDCODE_MANID & '1'; -- identifier (LSB has to be set)
           when addr_dtmcs_c  => tap_reg.dtmcs  <= tap_reg.dtmcs_nxt; -- status register
           when addr_dmi_c    => tap_reg.dmi    <= tap_reg.dmi_nxt; -- register interface
+          when addr_spi_c    => tap_reg.bypass_spi <= '1'; -- spi bypass
           when others        => tap_reg.bypass <= '0'; -- pass through
         end case;
       elsif (tap_ctrl_state = DR_SHIFT) and (tap_sync.tck_rising = '1') then -- access phase; [JTAG-SYNC] evaluate TDI on rising edge of TCK
@@ -194,12 +210,18 @@ begin
           when addr_idcode_c => tap_reg.idcode <= tap_sync.tdi & tap_reg.idcode(tap_reg.idcode'left downto 1);
           when addr_dtmcs_c  => tap_reg.dtmcs  <= tap_sync.tdi & tap_reg.dtmcs(tap_reg.dtmcs'left downto 1);
           when addr_dmi_c    => tap_reg.dmi    <= tap_sync.tdi & tap_reg.dmi(tap_reg.dmi'left downto 1);
+          when addr_spi_c    => tap_reg.bypass_spi_clk <= '1'; -- spi bypass
           when others        => tap_reg.bypass <= tap_sync.tdi;
         end case;
+      elsif (tap_ctrl_state = DR_EXIT1) then
+        tap_reg.bypass_spi <= '0';
+        tap_reg.bypass_spi_clk <= '0';
       end if;
 
       -- serial data output --
-      if (tap_sync.tck_falling = '1') then -- [JTAG-SYNC] update TDO on falling edge of TCK
+      if (tap_reg.bypass_spi = '1') then
+        jtag_tdo_o <= jtagspi_sdi_i;
+      elsif (tap_sync.tck_falling = '1') then -- [JTAG-SYNC] update TDO on falling edge of TCK
         if (tap_ctrl_state = IR_SHIFT) then
           jtag_tdo_o <= tap_reg.ireg(0);
         else

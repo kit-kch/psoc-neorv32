@@ -160,6 +160,12 @@ entity neorv32_top is
     jtag_tdo_o     : out std_ulogic;                                        -- serial data output
     jtag_tms_i     : in  std_ulogic := 'L';                                 -- mode select
 
+    -- jtagspi passthrough support --
+    jtagspi_sck_o  : out std_ulogic;
+    jtagspi_sdo_o  : out std_ulogic;
+    jtagspi_sdi_i  : in  std_ulogic := 'L';
+    jtagspi_csn_o  : out std_ulogic;
+
     -- External bus interface (available if XBUS_EN = true) --
     xbus_adr_o     : out std_ulogic_vector(31 downto 0);                    -- address
     xbus_dat_o     : out std_ulogic_vector(31 downto 0);                    -- write data
@@ -1713,7 +1719,11 @@ begin
       jtag_tdo_o => jtag_tdo_o,
       jtag_tms_i => jtag_tms_i,
       dmi_req_o  => dmi_req,
-      dmi_rsp_i  => dmi_rsp
+      dmi_rsp_i  => dmi_rsp,
+      jtagspi_sck_o    => jtagspi_sck_o,
+      jtagspi_sdo_o    => jtagspi_sdo_o,
+      jtagspi_sdi_i    => jtagspi_sdi_i,
+      jtagspi_csn_o    => jtagspi_csn_o
     );
 
     -- On-Chip Debugger - Debug Module (DM) ---------------------------------------------------
