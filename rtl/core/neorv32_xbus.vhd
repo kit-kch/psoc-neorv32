@@ -133,7 +133,7 @@ begin
   xbus_dat_o <= bus_req.data;
   xbus_we_o  <= bus_req.rw;
   xbus_sel_o <= bus_req.ben;
-  xbus_stb_o <= bus_req.stb;
+  xbus_stb_o <= bus_req.stb or pending(1);
   xbus_cyc_o <= bus_req.stb or pending(1);
   xbus_tag_o <= bus_req.src & '0' & bus_req.priv; -- instr/data, secure, privileged/unprivileged
 
