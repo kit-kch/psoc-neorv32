@@ -87,13 +87,15 @@ jobs:
         mv NEORV32.pdf NEORV32-nightly.pdf
         mv NEORV32_UserGuide.pdf NEORV32_UserGuide-nightly.pdf
 
+# Disable in PSOC fork: Not working & not needed
     # Tagged: create a pre-release or a release (semver)
     # Untagged: update the assets of pre-release 'nightly'
-    - name: '📦 Deploy to GitHub-Releases'
-      env:
-        GITHUB_TOKEN: ${{ github.token }}
-      run: |
-        gh release upload nightly NEORV32-SITE-nightly.tar.gz pdf/NEORV32*nightly.pdf --clobber
+#    - name: '📦 Deploy to GitHub-Releases'
+#      uses: actions/upload-release-asset@v1
+#      env:
+#        GITHUB_TOKEN: ${{ github.token }}
+#      run: |
+#        gh release upload nightly NEORV32-SITE-nightly.tar.gz pdf/NEORV32*nightly.pdf --clobber
 
     - name: '🚀 Deploy to GitHub-Pages'
       run: |
