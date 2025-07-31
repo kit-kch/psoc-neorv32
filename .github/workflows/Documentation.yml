@@ -68,6 +68,10 @@ jobs:
       - asciidoctor
     runs-on: ubuntu-22.04
     name: 'Deploy to Releases and Pages'
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
 
     steps:
 
@@ -87,22 +91,17 @@ jobs:
         mv NEORV32.pdf NEORV32-nightly.pdf
         mv NEORV32_UserGuide.pdf NEORV32_UserGuide-nightly.pdf
 
-    # Tagged: create a pre-release or a release (semver)
-    # Untagged: update the assets of pre-release 'nightly'
     - name: '📦 Deploy to GitHub-Releases'
       env:
         GITHUB_TOKEN: ${{ github.token }}
       run: |
-        gh release upload nightly NEORV32-SITE-nightly.tar.gz pdf/NEORV32*nightly.pdf --clobber
+        gh release upload psoc-nightly NEORV32-SITE-nightly.tar.gz pdf/NEORV32*nightly.pdf --clobber
 
-    - name: '🚀 Deploy to GitHub-Pages'
-      run: |
-        cd public
-        git init
-        cp ../.git/config ./.git/config
-        touch .nojekyll
-        git add .
-        git config --local user.email "push@gha"
-        git config --local user.name "GHA"
-        git commit -am 'update ${{ github.sha }}'
-        git push -u origin +HEAD:gh-pages
+
+    - name: '📦 Upload to GitHub-Pages'
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: ./public
+
+    - name: '🚀 Deploy to GitHub Pages'
+      uses: actions/deploy-pages@v4
